@@ -4,20 +4,20 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 class SocketIO {
+  String? _domain;
+  String? _namespace;
+  String? _query;
+  Function? _statusCallback;
+  String? _statusCallbackName;
+  late MethodChannel _channel;
 
-  String _domain;
-  String _namespace;
-  String _query;
-  Function _statusCallback;
-  String _statusCallbackName;
-  MethodChannel _channel;
-
-  Map<String, CallbackFunctions> _callbacks;
+  Map<String, CallbackFunctions>? _callbacks;
 
   ///domain: domain url
   ///namespace: just for iOS
   ///socketStatusCallback [optional]: the status of socket [connect/disconnect/reconnect/...] will be sent into this function
-  SocketIO(MethodChannel channel, String domain, String namespace, {String query, Function socketStatusCallback}) {
+  SocketIO(MethodChannel channel, String domain, String namespace,
+      {String? query, Function? socketStatusCallback}) {
     _channel = channel;
     _domain = domain;
     _namespace = namespace;
@@ -28,17 +28,18 @@ class SocketIO {
     _statusCallbackName = _parserFunctionName(socketStatusCallback);
   }
 
-  Future<dynamic> handlerMethodCall(String event, String callbackFuncName, dynamic arguments) {
+  Future<dynamic>? handlerMethodCall(
+      String? event, String? callbackFuncName, dynamic arguments) {
     if (event != null && event.isNotEmpty) {
       if (event == _statusCallbackName && _statusCallback != null) {
-        _statusCallback(arguments);
+        _statusCallback!(arguments);
       } else {
-        CallbackFunctions functions = _callbacks[event];
+        CallbackFunctions? functions = _callbacks![event];
         if (functions != null) {
-          SocketIOFunction f = functions.getFunctionByName(callbackFuncName);
+          SocketIOFunction? f = functions.getFunctionByName(callbackFuncName);
           if (f != null && f.function != null) {
-            print("CALLLING FUNCTION: " + f.functionName);
-            f.function(arguments);
+            print("CALLLING FUNCTION: " + f.functionName!);
+            f.function!(arguments);
             return null;
           }
         }
@@ -48,21 +49,21 @@ class SocketIO {
   }
 
   _clearAll() {
-    if(_callbacks != null) {
-      _callbacks.clear();
+    if (_callbacks != null) {
+      _callbacks!.clear();
     }
   }
 
   /// Get Id (Url + Namespace) of the socket
-  String getId() {
+  String? getId() {
     if (_domain != null) {
-      return _domain + (_namespace != null ? _namespace : "");
+      return _domain! + (_namespace != null ? _namespace! : "");
     }
     return null;
   }
 
   /// Init socket before doing anything with socket
-  Future<void> init({String query}) async {
+  Future<void> init({String? query}) async {
     if (query != null) {
       _query = query;
     }
@@ -86,8 +87,8 @@ class SocketIO {
   /// Subscribe to a channel with a callback
   Future<void> subscribe(String event, Function callback) async {
     if (event != null && event.isNotEmpty) {
-      CallbackFunctions functions = _callbacks[event];
-      SocketIOFunction f;
+      CallbackFunctions? functions = _callbacks![event];
+      SocketIOFunction? f;
 
       if (functions == null) {
         functions = new CallbackFunctions();
@@ -97,9 +98,9 @@ class SocketIO {
         f = functions.addFunction(callback);
       }
 
-      _callbacks[event] = functions;
+      _callbacks![event] = functions;
 
-      var subscribes = new Map<String, String>();
+      var subscribes = new Map<String, String?>();
       subscribes.putIfAbsent(event, () => f == null ? "" : f.functionName);
 
       await _channel.invokeMethod(MethodCallName.SOCKET_SUBSCRIBES, {
@@ -113,26 +114,22 @@ class SocketIO {
   /// Unsubscribe from a channel
   ///
   /// When no callback is provided, unsubscribe all subscribers of the channel. Otherwise, unsubscribe only the callback passed in
-  Future<void> unSubscribe(String event, [Function callback]) async {
-
+  Future<void> unSubscribe(String event, [Function? callback]) async {
     if (event != null && event.isNotEmpty) {
-
-      CallbackFunctions callbackFunctions = _callbacks[event];
+      CallbackFunctions? callbackFunctions = _callbacks![event];
 
       if (callbackFunctions != null) {
-
         callbackFunctions.remove(callback);
 
-        if(callbackFunctions.functions.length < 1) {
-          _callbacks.remove(event);
+        if (callbackFunctions.functions!.length < 1) {
+          _callbacks!.remove(event);
         } else {
-          _callbacks[event] = callbackFunctions;
+          _callbacks![event] = callbackFunctions;
         }
-
       }
 
       SocketIOFunction f = new SocketIOFunction(callback);
-      var unSubscribes = new Map<String, String>();
+      var unSubscribes = new Map<String, String?>();
       unSubscribes.putIfAbsent(event, () => f == null ? "" : f.functionName);
       await _channel.invokeMethod(MethodCallName.SOCKET_UNSUBSCRIBES, {
         MethodCallArgumentsName.SOCKET_DOMAIN: _domain,
@@ -143,10 +140,11 @@ class SocketIO {
   }
 
   /// Send a message via a channel (i.e. event)
-  Future<void> sendMessage(String event, dynamic message, [Function callback]) async {
+  Future<void> sendMessage(String event, dynamic message,
+      [Function? callback]) async {
     if (event != null && event.isNotEmpty) {
-      CallbackFunctions functions = _callbacks[event];
-      SocketIOFunction f;
+      CallbackFunctions? functions = _callbacks![event];
+      SocketIOFunction? f;
 
       if (functions == null) {
         functions = new CallbackFunctions();
@@ -156,7 +154,7 @@ class SocketIO {
         f = functions.addFunction(callback);
       }
 
-      _callbacks[event] = functions;
+      _callbacks![event] = functions;
 
       await _channel.invokeMethod(MethodCallName.SOCKET_SEND_MESSAGE, {
         MethodCallArgumentsName.SOCKET_DOMAIN: _domain,
@@ -195,7 +193,7 @@ class SocketIO {
   }
 }
 
-String _parserFunctionName(Object function) {
+String? _parserFunctionName(Object? function) {
   if (function != null) {
     return "FunctionId@${function.hashCode}";
   }
@@ -203,10 +201,10 @@ String _parserFunctionName(Object function) {
 }
 
 class SocketIOFunction {
-  String _funcName;
-  Function _function;
+  String? _funcName;
+  Function? _function;
 
-  SocketIOFunction(Function function) {
+  SocketIOFunction(Function? function) {
     _function = function;
     _funcName = _parserFunctionName(function);
   }
@@ -216,32 +214,31 @@ class SocketIOFunction {
     _funcName = _parserFunctionName(function);
   }
 
-  String get functionName => _funcName;
+  String? get functionName => _funcName;
 
-  Function get function => _function;
+  Function? get function => _function;
 }
 
 class CallbackFunctions {
-
-  List<SocketIOFunction> _functions;
+  List<SocketIOFunction>? _functions;
 
   CallbackFunctions() {
-    _functions = new List();
+    _functions = [];
   }
 
   SocketIOFunction addFunction(Function function) {
-    SocketIOFunction f = getFunction(function);
+    SocketIOFunction? f = getFunction(function);
     if (f == null) {
       f = new SocketIOFunction(function);
-      _functions.add(f);
+      _functions!.add(f);
     }
     return f;
   }
 
-  SocketIOFunction getFunctionByName(String funcName) {
+  SocketIOFunction? getFunctionByName(String? funcName) {
     if (funcName != null && funcName.isNotEmpty) {
-      SocketIOFunction result;
-      _functions.forEach((f) {
+      SocketIOFunction? result;
+      _functions!.forEach((f) {
         if (f != null && f.functionName == funcName) {
           result = f;
           return;
@@ -252,11 +249,11 @@ class CallbackFunctions {
     return null;
   }
 
-  SocketIOFunction getFunction(Function function) {
+  SocketIOFunction? getFunction(Function function) {
     if (function != null) {
-      SocketIOFunction result;
-      String funcName = _parserFunctionName(function);
-      _functions.forEach((f) {
+      SocketIOFunction? result;
+      String? funcName = _parserFunctionName(function);
+      _functions!.forEach((f) {
         if (f != null && funcName != null && f.functionName == funcName) {
           result = f;
           return;
@@ -267,29 +264,29 @@ class CallbackFunctions {
     return null;
   }
 
-  bool remove(Function function) {
+  bool remove(Function? function) {
     if (function != null) {
-      String funcName = _parserFunctionName(function);
-      SocketIOFunction socketIOFunction;
-      _functions.forEach((f) {
+      String? funcName = _parserFunctionName(function);
+      SocketIOFunction? socketIOFunction;
+      _functions!.forEach((f) {
         if (f != null && funcName != null && f.functionName == funcName) {
           socketIOFunction = f;
           return;
         }
       });
 
-      return _functions.remove(socketIOFunction);
+      return _functions!.remove(socketIOFunction);
     }
     return false;
   }
 
   void removeAllFunctions() {
     if (_functions != null) {
-      _functions.clear();
+      _functions!.clear();
     }
   }
 
-  List<SocketIOFunction> get functions => _functions;
+  List<SocketIOFunction>? get functions => _functions;
 }
 
 class MethodCallArgumentsName {
